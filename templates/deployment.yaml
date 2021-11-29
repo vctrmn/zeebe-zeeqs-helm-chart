@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "zeebe-simple-monitor.fullname" . }}
+  labels:
+    app: {{ include "zeebe-simple-monitor.fullname" . }}
+    tag: {{ .Values.image.tag }}
+    {{- range $key, $value := .Values.labels }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "zeebe-simple-monitor.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "zeebe-simple-monitor.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "zeebe-simple-monitor.serviceAccountName" . }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 9000
+              protocol: TCP
+          env:
+            - name: SERVER_PORT
+              value: 9000
+            - name: ZEEBE_CLIENT_WORKER_HAZELCAST_CONNECTION
+              value: {{ .Values.global.hazelcast.host }}:{{ .Values.global.hazelcast.port }}
+            - name: HAZELCAST_HOST
+              value: {{ .Values.global.hazelcast.host }}
+            - name: HAZELCAST_PORT
+              value: {{ .Values.global.hazelcast.port }}
+          {{- with .Values.image.env }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: libs 
+              mountPath: /app/libs
+      volumes:
+        - name: libs
+          emptyDir: {}
+      initContainers: 
+      {{- with .Values.initContainers }}
+        {{- toYaml .  | nindent 8 }}
+      {{- end }}
